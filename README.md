@@ -2,7 +2,7 @@
 
 Tello Node JS backend uses websockets, an express server, ffmpeg, please ensure you have all the dependencies before installing and running this project. 
 
-#### Tech stack used
+Tech stack used
 - Node JS
 - Websockets
 - Express
@@ -27,7 +27,7 @@ Make the CLI tool better
 
 The CLI Interface also uses a websocket server but requires the user to send commands as specified in the [Tello SDK Docs](https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf)
 
-#### Tech stack used
+Tech stack used
 - Node JS
 - Websockets
 - Commander (For cli arguments)
