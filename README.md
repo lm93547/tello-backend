@@ -15,7 +15,7 @@ Run `npm install`
 Arguments for run:
 `node ./index.js --cli` or `node ./index.js -cli-tool` for the command line tool
 
-`node ./index.js --browser` or `node ./index.js -browser-tool` for the video and browser player which is the tello front end [here](https://github.com/lm93547/tello-frontend) and can be found at [http://localhost:4000](http://localhost:4000)
+`node ./index.js --browser` or `node ./index.js -browser-tool` for the video and browser player which is for the tello front end [here](https://github.com/lm93547/tello-frontend) and can be found at [http://localhost:4000](http://localhost:4000)
 
 To run tests run `npm run test`
 
