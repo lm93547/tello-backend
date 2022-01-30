@@ -1,8 +1,9 @@
 // Import necessary modules for the project
 const Tello = require('./Tello');
-const { Command } = require('commander');
-const program = new Command();
-program.version('0.0.1');
+var inquirer = require('inquirer');
+const chalk = require('chalk');
+// const program = new Command();
+// program.version('0.0.1');
 // A basic http server that we'll access to view the stream
 const http = require('http');
 
@@ -22,6 +23,8 @@ const app = express();
 const ioServer = http.createServer(app);
 const { Server } = require("socket.io");
 const { throttle } = require('lodash');
+const { chalkRed } = require('./chalk/chalkRed');
+const { chalkGreen } = require('./chalk/chalkGreen');
 
 function videoAndCommands(){
   // HTTP and streaming ports
@@ -38,7 +41,6 @@ function videoAndCommands(){
       console.log(err);
     }
   }
-  
   /*
     1. Create the web server accessed at (for the basic front end)
     http://localhost:3000/index.html
@@ -65,7 +67,6 @@ function videoAndCommands(){
     });
   
   }).listen(HTTP_PORT); // Listen on port 3000
-  
   /*
     2. Create the stream server where the video stream will be sent
   */
@@ -76,8 +77,7 @@ function videoAndCommands(){
       'Stream Connection on ' + STREAM_PORT + ' from: ' + 
       request.socket.remoteAddress + ':' +
       request.socket.remotePort
-    );
-  
+    );  
     // When data comes from the stream (FFmpeg) we'll pass this to the web socket
     request.on('data', function(data) {
       // Now that we have data let's pass it to the web socket server
@@ -128,13 +128,19 @@ function videoAndCommands(){
       io.sockets.emit('dronestate', formattedState);
     }, 100)
   );
-  
+
+  drone.on('message', message => {
+    console.log(`🤖 : ${message}`);
+    const formattedState = message.toString()
+    io.sockets.emit('droneresponse', formattedState);
+  });
+
   // These send commands could be smarter by waiting for the SDK to respond with 'ok' and handling errors
   // Send command
-  drone.send("command", TELLO_PORT, TELLO_IP, null);
+  drone.send("command", TELLO_PORT, TELLO_IP, handleError);
   
   // Send streamon
-  drone.send("streamon", TELLO_PORT, TELLO_IP, null);
+  drone.send("streamon", TELLO_PORT, TELLO_IP, handleError);
   
   const io = new Server(ioServer, {
     cors: {
@@ -150,40 +156,70 @@ function videoAndCommands(){
     socket.on('command', command => {
         console.log('command Sent from browser');
         console.log(command);
+        if(command === 'streamon'){
+          stream();
+        }
         drone.send(command, 0, command.length, TELLO_PORT, TELLO_IP, handleError);
     });
-    
     socket.emit('status', 'CONNECTED');
   });
+
+
   
   /*
     5. Begin the ffmpeg stream. You must have Tello connected first
   */
   
   // Delay for 3 seconds before we start ffmpeg
-  setTimeout(function() {
-    var args = [
-      "-i", "udp://0.0.0.0:11111",
-      "-r", "30",
-      "-s", "960x720",
-      "-codec:v", "mpeg1video",
-      "-b", "800k",
-      "-f", "mpegts",
-      "http://127.0.0.1:3001/stream"
-    ];
-  
-    // Spawn an ffmpeg instance
-    var streamer = spawn('ffmpeg', args);
-    // Uncomment if you want to see ffmpeg stream info
-    //streamer.stderr.pipe(process.stderr);
-    streamer.on("exit", function(code){
-        console.log("Failure", code);
-    });
-  }, 3000);
+  function stream(){
+    setTimeout(function() {
+      var args = [
+        "-i", "udp://0.0.0.0:11111",
+        "-r", "30",
+        "-s", "1280x720",
+        "-codec:v", "mpeg1video",
+        "-b", "5000k",
+        "-f", "mpegts",
+        "http://127.0.0.1:3001/stream"
+      ];
+    
+      // Spawn an ffmpeg instance
+      var streamer = spawn('ffmpeg', args);
+      // Uncomment if you want to see ffmpeg stream info
+      //streamer.stderr.pipe(process.stderr);
+      streamer.on("exit", function(code){
+          console.log(`${chalkRed("FFmpeg failure code")}`, code);
+          streamer.kill("SIGINT")
+          shutdownServer();
+      });
+    }, 3000);
+  }
+
+  // ioServer.post('/reset-server', (request, response)=>{
+  //   console.log("sent a reset command")
+  // })
+  stream()
   
   ioServer.listen(6767, () => {
-    console.log('listening on *:6767');
+    console.log(chalk.white.bgGreen.bold('listening on *:6767'));
   });
+}
+
+function testMode(){
+  app.post('/reset-server', (request, response)=>{
+    console.log("Post hit", response.statusCode)
+    return response.statusCode
+  })
+
+  ioServer.listen(6767, () => {
+    console.log(chalkGreen('listening on *:6767'));
+  });
+}
+
+function shutdownServer(){
+  ioServer.close()
+  console.log(chalkRed("closed app"))
+  process.exit(1);
 }
 
 function commandLine(){
@@ -197,16 +233,48 @@ function commandLine(){
   });
 }
 
-program
-  .option('-cli-tool, --cli', 'Control the drone using the CLI')
-  .option('-browser-tool, --browser', 'Control the drone using the browser at http://localhost:4000/')
+// program
+//   .option('-cli-tool, --cli', 'Control the drone using the CLI')
+//   .option('-browser-tool, --browser', 'Control the drone using the browser at http://localhost:4000/')
 
-program.parse(process.argv);
+// program.parse(process.argv);
 
-const options = program.opts();
-if (options.cli){
-  commandLine()
-}
-if (options.browser){
-  videoAndCommands()
-}
+// const options = program.opts();
+// if (options.cli){
+//   commandLine()
+// }
+// if (options.browser){
+//   videoAndCommands()
+// }
+inquirer
+  .prompt([
+    /* Pass your questions in here */
+    {
+      type: 'list',
+      name: 'Tool Type',
+      choices: [
+        "Do you want to control the drone using commands?",
+        "Do you want to control the drone using the browser?",
+        "Test mode"
+      ]
+    }
+  ])
+  .then((answers) => {
+    // Use user feedback for... whatever!!
+    if(answers['Tool Type'] === "Do you want to control the drone using commands?"){
+      commandLine();
+    }
+    if(answers['Tool Type'] === "Do you want to control the drone using the browser?"){
+      videoAndCommands();
+    }
+    if(answers['Tool Type'] === "Test mode"){
+      testMode();
+    }
+  })
+  .catch((error) => {
+    if (error.isTtyError) {
+      // Prompt couldn't be rendered in the current environment
+    } else {
+      // Something else went wrong
+    }
+  });
